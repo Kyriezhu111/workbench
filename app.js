@@ -29,6 +29,37 @@
     var bin = atob(s), bytes = Uint8Array.from(bin, function (c) { return c.charCodeAt(0); });
     return new TextDecoder().decode(bytes);
   }
+  function b64ToBytes(s) {
+    s = s.replace(/-/g, '+').replace(/_/g, '/');
+    var bin = atob(s);
+    return Uint8Array.from(bin, function (c) { return c.charCodeAt(0); });
+  }
+  function markSeen() { try { localStorage.setItem(LS_SEEN, '1'); } catch (e) { } }
+  function clearHash() { try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { } }
+  /* 导入链接：#d=明文 或 #z=压缩（链接短很多，微信里不会被截断） */
+  async function readHash() {
+    var m = location.hash.match(/[#&]([dz])=([A-Za-z0-9\-_]+)/);
+    if (!m) return null;
+    try {
+      if (m[1] === 'd') return JSON.parse(b64decode(m[2]));
+      if (typeof DecompressionStream !== 'function') return null;
+      var stream = new Blob([b64ToBytes(m[2])]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+      var buf = await new Response(stream).arrayBuffer();
+      return JSON.parse(new TextDecoder().decode(buf));
+    } catch (e) { return null; }
+  }
+  async function makeLink() {
+    var json = JSON.stringify(DB), base = location.origin + location.pathname;
+    try {
+      if (typeof CompressionStream === 'function') {
+        var st = new Blob([json]).stream().pipeThrough(new CompressionStream('deflate-raw'));
+        var buf = await new Response(st).arrayBuffer(), bin = '';
+        new Uint8Array(buf).forEach(function (b) { bin += String.fromCharCode(b); });
+        return base + '#z=' + btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      }
+    } catch (e) { }
+    return base + '#d=' + b64encode(json);
+  }
 
   /* ---------------- 数据读写 ---------------- */
   var DEMO = clone(window.DEMO_DATA);
@@ -38,16 +69,6 @@
   function loadDB() {
     var raw = null;
     try { raw = localStorage.getItem(LS_DB); } catch (e) { }
-    var m = location.hash.match(/[#&]d=([A-Za-z0-9\-_]+)/);
-    if (m) {
-      try {
-        var imported = JSON.parse(b64decode(m[1]));
-        saveDB(imported);
-        try { localStorage.setItem(LS_SEEN, '1'); } catch (e) { }
-        history.replaceState(null, '', location.pathname + location.search);
-        return imported;
-      } catch (e) { /* 导入码坏了就继续用本地的 */ }
-    }
     if (raw) { try { return JSON.parse(raw); } catch (e) { } }
     return clone(DEMO);
   }
@@ -441,13 +462,16 @@
       try {
         var obj = JSON.parse(document.getElementById('jsonBox').value);
         DB = obj; saveDB(DB);
-        try { localStorage.setItem(LS_SEEN, '1'); } catch (e2) { }
+        markSeen();
         seenWeek = 'cur'; toast('已应用'); rerender();
       } catch (err) { toast('JSON 格式有问题，没改动'); }
     } else if (act === 'copyLink') {
-      var code = b64encode(JSON.stringify(DB));
-      var url = location.origin + location.pathname + '#d=' + code;
-      copyText(url, '导入链接已复制，发到微信就能在手机上打开');
+      var btn = el;
+      btn.textContent = '生成中…';
+      makeLink().then(function (url) {
+        btn.textContent = '复制导入链接';
+        copyText(url, '链接已复制（' + url.length + ' 字），发到微信就能在手机上打开');
+      });
     } else if (act === 'download') {
       var blob = new Blob([JSON.stringify(DB, null, 2)], { type: 'application/json' });
       var a = document.createElement('a');
@@ -494,6 +518,13 @@
   });
 
   render();
+  (async function () {
+    var imported = await readHash();
+    if (!imported) return;
+    DB = imported; saveDB(DB); markSeen(); clearHash();
+    seenWeek = 'cur'; render();
+    toast('数据已导入这台手机');
+  })();
   if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     navigator.serviceWorker.register('sw.js').catch(function () { });
   }
