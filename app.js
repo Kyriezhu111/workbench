@@ -210,6 +210,12 @@
           + '<div class="place">' + esc(c.place || '') + (c.teacher ? ' · ' + esc(c.teacher) : '') + (weekLabel(c) ? ' · ' + weekLabel(c) : '') + '</div></div></div>';
       });
     }
+    var tmr = new Date(now.getTime() + 86400000);
+    var tmrList = coursesOn(dowOf(tmr), weekNumber(tmr));
+    h += '<div style="border-top:1px solid var(--line);margin-top:10px;padding-top:9px" class="mini">'
+      + '明天 周' + DOW_CN[dowOf(tmr) - 1] + '：' + (tmrList.length
+        ? tmrList.map(function (c) { return timeLabel(c) + ' ' + esc(c.name) + '（' + esc(c.place || '') + '）'; }).join('；')
+        : '没课') + '</div>';
     h += '</div>';
 
     h += '<div class="card"><h2>今天的三件要事</h2>';
@@ -223,16 +229,25 @@
     h += '<div class="addrow"><input id="newTask" placeholder="加一条要事…" autocomplete="off"><button data-act="addTask">加</button></div>';
     h += '</div>';
 
-    var ddls = (DB.ddl || []).filter(function (d) { return !d.done; }).slice().sort(function (a, b) {
-      if (!a.due) return 1; if (!b.due) return -1; return a.due < b.due ? -1 : 1;
-    }).slice(0, 3);
+    var undone = [];
+    (DB.ddl || []).forEach(function (d, i) { if (!d.done) undone.push({ d: d, i: i }); });
+    undone.sort(function (a, b) {
+      if (!a.d.due && !b.d.due) return a.i - b.i;
+      if (!a.d.due) return 1;
+      if (!b.d.due) return -1;
+      return a.d.due < b.d.due ? -1 : 1;
+    });
+    var ddls = undone.slice(0, 5);
     if (ddls.length) {
-      h += '<div class="card"><h2>近期截止</h2>';
-      ddls.forEach(function (d) {
+      h += '<div class="card"><h2>待办（' + undone.length + ' 件没做完）</h2>';
+      ddls.forEach(function (o) {
+        var d = o.d;
         h += '<div class="row"><div><div class="title">' + esc(d.title) + '</div>'
           + '<div class="sub">' + (d.due ? esc(d.due) : '日期待定') + (d.note ? ' · ' + esc(d.note) : '') + '</div></div>'
-          + leftChip(daysLeft(d.due)) + '</div>';
+          + '<div style="display:flex;align-items:center;gap:8px">' + leftChip(daysLeft(d.due))
+          + '<button class="del" data-act="ddlDone" data-i="' + o.i + '" title="完成">✓</button></div></div>';
       });
+      if (undone.length > ddls.length) h += '<div class="mini">还有 ' + (undone.length - ddls.length) + ' 件在「任务」页</div>';
       h += '</div>';
     }
 
