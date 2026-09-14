@@ -1,8 +1,8 @@
 /* 离线缓存：让工作台在没网、电脑关机时也能打开。
    策略：联网优先 —— 每次打开都取服务器上的最新版，只有断网才回退到缓存。
    （最早用的是缓存优先，结果手机上一路显示旧界面，见 lessons。） */
-var CACHE = 'workbench-v2-3';
-var FILES = ['./', './index.html', './app.js?v=3', './data.js?v=3', './manifest.webmanifest', './icon.svg'];
+var CACHE = 'workbench-v2-4';
+var FILES = ['./', './index.html', './app.js?v=4', './data.js?v=4', './manifest.webmanifest', './icon.svg'];
 
 self.addEventListener('install', function (e) {
   e.waitUntil(
