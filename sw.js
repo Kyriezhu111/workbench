@@ -1,5 +1,5 @@
 /* 离线缓存：让工作台在没网、电脑关机时也能打开 */
-var CACHE = 'workbench-v2-1';
+var CACHE = 'workbench-v2-2';
 var FILES = ['./', './index.html', './app.js', './data.js', './manifest.webmanifest', './icon.svg'];
 
 self.addEventListener('install', function (e) {
