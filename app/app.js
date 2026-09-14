@@ -7,6 +7,7 @@
 
   var LS_DB = 'wb.db.v2', LS_DAILY = 'wb.daily.v2', LS_SEEN = 'wb.seen.v1';
   var DOW_CN = ['一', '二', '三', '四', '五', '六', '日'];
+  var APP_VERSION = 'v4 · 2026-09-14';
 
   /* ---------------- 小工具 ---------------- */
   var pad = function (n) { return String(n).padStart(2, '0'); };
@@ -379,10 +380,12 @@
       + '<button class="btn small" data-act="reset">恢复示例数据</button></div></div>';
 
     h += '<div class="card"><h2>版本</h2>'
+      + '<div class="mini">当前版本：<b>' + APP_VERSION + '</b></div>'
       + '<div class="mini">界面看起来还是旧的样子（少了某个刚加的功能）就点下面这个，它会清掉缓存重新加载。</div>'
+      + '<div class="mini">这个按钮连老地址（/workbench/）的缓存一起清，清完主屏幕上旧图标也能跳到新地址。</div>'
       + '<div class="actions"><button class="btn small primary" data-act="forceUpdate">强制更新到最新版</button></div></div>';
 
-    h += '<footer>数据只存在这台手机的浏览器里，不会上传到任何服务器。<br>手机浏览器菜单里选「添加到主屏幕」，就能像 App 一样打开。</footer>';
+    h += '<footer>数据只存在这台手机的浏览器里，不会上传到任何服务器。<br>手机浏览器菜单里选「添加到主屏幕」，就能像 App 一样打开。<br>当前版本 ' + APP_VERSION + '</footer>';
     return h;
   }
 
