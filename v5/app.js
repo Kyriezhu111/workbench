@@ -7,7 +7,8 @@
 
   var LS_DB = 'wb.db.v2', LS_DAILY = 'wb.daily.v2', LS_SEEN = 'wb.seen.v1';
   var DOW_CN = ['一', '二', '三', '四', '五', '六', '日'];
-  var APP_VERSION = 'v5 · 2026-09-14';
+  var APP_VERSION = 'v5.1 · 2026-09-14';
+  var CLOUD_DATA = 'd-7f3a9c2e.json';
 
   /* ---------------- 小工具 ---------------- */
   var pad = function (n) { return String(n).padStart(2, '0'); };
@@ -38,8 +39,12 @@
   function markSeen() { try { localStorage.setItem(LS_SEEN, '1'); } catch (e) { } }
   function clearHash() { try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { } }
   /* 导入链接：#d=明文 或 #z=压缩（链接短很多，微信里不会被截断） */
-  async function readHash() {
-    var m = location.hash.match(/[#&]([dz])=([A-Za-z0-9\-_]+)/);
+  /* 一段文字 → 数据：支持完整链接、只粘 #z=/#d= 那串、或直接粘 JSON */
+  async function parsePayload(txt) {
+    txt = String(txt || '').trim();
+    if (!txt) return null;
+    if (txt.charAt(0) === '{') { try { return JSON.parse(txt); } catch (e) { return null; } }
+    var m = txt.match(/([dz])=([A-Za-z0-9\-_]+)/);
     if (!m) return null;
     try {
       if (m[1] === 'd') return JSON.parse(b64decode(m[2]));
@@ -48,6 +53,14 @@
       var buf = await new Response(stream).arrayBuffer();
       return JSON.parse(new TextDecoder().decode(buf));
     } catch (e) { return null; }
+  }
+  async function readHash() {
+    if (!location.hash) return null;
+    return parsePayload(location.hash);
+  }
+  function applyData(obj, msg) {
+    DB = obj; saveDB(DB); markSeen(); seenWeek = 'cur';
+    toast(msg || '数据已更新'); render();
   }
   async function makeLink() {
     var json = JSON.stringify(DB), base = location.origin + location.pathname;
@@ -379,6 +392,14 @@
       + '<button class="btn small" data-act="download">导出文件</button>'
       + '<button class="btn small" data-act="reset">恢复示例数据</button></div></div>';
 
+    h += '<div class="card"><h2>换设备 / 换图标后取回数据</h2>'
+      + '<div class="mini">iPhone 上「主屏图标」和「Safari」是两套独立存储：在 Safari 里导入的数据，<br>'
+      + '从主屏图标打开时可能看不到。用下面任意一种方式取回一次就好。</div>'
+      + '<div class="actions"><button class="btn small primary" data-act="fetchCloud">从云端取回我的数据</button></div>'
+      + '<div class="mini">或者把导入链接／数据粘进下面的框（只粘 <b>z=</b> 后面那一大串也可以）：</div>'
+      + '<textarea id="pasteBox" style="min-height:70px;font-family:ui-monospace,Menlo,monospace;font-size:12px" placeholder="把链接或数据粘到这里"></textarea>'
+      + '<div class="actions"><button class="btn small" data-act="applyPaste">导入这段内容</button></div></div>';
+
     h += '<div class="card"><h2>版本</h2>'
       + '<div class="mini">当前版本：<b>' + APP_VERSION + '</b></div>'
       + '<div class="mini">界面看起来还是旧的样子（少了某个刚加的功能）就点下面这个，它会清掉缓存重新加载。</div>'
@@ -485,10 +506,21 @@
     } else if (act === 'applyJson') {
       try {
         var obj = JSON.parse(document.getElementById('jsonBox').value);
-        DB = obj; saveDB(DB);
-        markSeen();
-        seenWeek = 'cur'; toast('已应用'); rerender();
+        applyData(obj, '已应用');
       } catch (err) { toast('JSON 格式有问题，没改动'); }
+    } else if (act === 'fetchCloud') {
+      var btnCloud = el;
+      btnCloud.textContent = '取回中…';
+      fetch(CLOUD_DATA + '?t=' + Date.now())
+        .then(function (r) { if (!r.ok) throw new Error('404'); return r.json(); })
+        .then(function (obj) { applyData(obj, '数据已取回'); })
+        .catch(function () { btnCloud.textContent = '从云端取回我的数据'; toast('没取到（可能已删掉），用下面的粘贴导入'); });
+    } else if (act === 'applyPaste') {
+      var box = document.getElementById('pasteBox');
+      parsePayload(box.value).then(function (obj) {
+        if (!obj) { toast('没看懂这段内容'); return; }
+        box.value = ''; applyData(obj, '数据已导入');
+      });
     } else if (act === 'copyLink') {
       var btn = el;
       btn.textContent = '生成中…';
