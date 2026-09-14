@@ -206,8 +206,9 @@
         var badge = (nowCourse === c) ? '<span class="badge">进行中</span>' : (nextCourse === c ? '<span class="badge soft">下一节</span>' : '');
         var t = spanText(c.from, c.to);
         h += '<div class="' + cls + '"><div class="time"><b>' + timeLabel(c) + '</b>' + (t ? t : '') + '</div>'
-          + '<div><div class="name">' + esc(c.name) + badge + '</div>'
-          + '<div class="place">' + esc(c.place || '') + (c.teacher ? ' · ' + esc(c.teacher) : '') + (weekLabel(c) ? ' · ' + weekLabel(c) : '') + '</div></div></div>';
+          + '<div><div class="name">' + esc(c.name)
+          + (c.place ? ' <span class="where">' + esc(c.place) + '</span>' : '') + badge + '</div>'
+          + '<div class="place">' + (c.teacher ? esc(c.teacher) : '') + (weekLabel(c) ? (c.teacher ? ' · ' : '') + weekLabel(c) : '') + '</div></div></div>';
       });
     }
     var tmr = new Date(now.getTime() + 86400000);
@@ -301,8 +302,9 @@
       if (!list.length) h += '<div class="empty">没课</div>';
       list.forEach(function (c) {
         var t = spanText(c.from, c.to);
-        h += '<div class="lesson"><div class="n">' + timeLabel(c) + (t ? ' <span class="d" style="color:var(--ink2);font-weight:400">' + t + '</span>' : '') + ' · ' + esc(c.name) + '</div>'
-          + '<div class="m">' + esc(c.place || '') + (c.teacher ? ' · ' + esc(c.teacher) : '') + (weekLabel(c) ? ' · ' + weekLabel(c) : '') + '</div></div>';
+        h += '<div class="lesson"><div class="n">' + esc(c.name)
+          + (c.place ? ' <span class="where">' + esc(c.place) + '</span>' : '') + '</div>'
+          + '<div class="m">' + timeLabel(c) + (t ? ' ' + t : '') + (c.teacher ? ' · ' + esc(c.teacher) : '') + (weekLabel(c) ? ' · ' + weekLabel(c) : '') + '</div></div>';
       });
       h += '</div>';
     }
@@ -375,6 +377,10 @@
       + '<button class="btn small" data-act="copyLink">复制导入链接</button>'
       + '<button class="btn small" data-act="download">导出文件</button>'
       + '<button class="btn small" data-act="reset">恢复示例数据</button></div></div>';
+
+    h += '<div class="card"><h2>版本</h2>'
+      + '<div class="mini">界面看起来还是旧的样子（少了某个刚加的功能）就点下面这个，它会清掉缓存重新加载。</div>'
+      + '<div class="actions"><button class="btn small primary" data-act="forceUpdate">强制更新到最新版</button></div></div>';
 
     h += '<footer>数据只存在这台手机的浏览器里，不会上传到任何服务器。<br>手机浏览器菜单里选「添加到主屏幕」，就能像 App 一样打开。</footer>';
     return h;
@@ -498,6 +504,26 @@
         try { localStorage.removeItem(LS_DAILY); } catch (e3) { }
         toast('已恢复示例'); rerender();
       }
+    } else if (act === 'forceUpdate') {
+      toast('正在更新…');
+      var jobs = [];
+      try {
+        if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+          jobs.push(navigator.serviceWorker.getRegistrations().then(function (rs) {
+            return Promise.all(rs.map(function (r) { return r.unregister(); }));
+          }));
+        }
+      } catch (e4) { }
+      try {
+        if (window.caches && caches.keys) {
+          jobs.push(caches.keys().then(function (ks) {
+            return Promise.all(ks.map(function (k) { return caches.delete(k); }));
+          }));
+        }
+      } catch (e5) { }
+      Promise.all(jobs).catch(function () { }).then(function () {
+        setTimeout(function () { location.replace(location.pathname + '?u=' + Date.now()); }, 400);
+      });
     }
   });
 
