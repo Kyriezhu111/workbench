@@ -307,7 +307,7 @@
       h += '</div>';
     }
     if (!total && wk == null) h += '<div class="empty">这一周没有课。</div>';
-    h += '<footer>作息时间是参考值，可在「设置」里改成教务处的实际时间。</footer>';
+    h += '<footer>作息时间按学院推荐课表填写，可在「设置」里改。</footer>';
     return h;
   }
 
@@ -364,7 +364,7 @@
     h += '<div class="card"><h2>习惯（一行一个）</h2><textarea id="sHabits">' + esc((DB.habits || []).join('\n')) + '</textarea>'
       + '<div class="actions"><button class="btn small primary" data-act="saveHabits">保存</button></div></div>';
 
-    h += '<div class="card"><h2>作息时间（一节一行，参考值请核对）</h2><textarea id="sPeriods">' + esc((DB.periods || []).join('\n')) + '</textarea>'
+    h += '<div class="card"><h2>作息时间（一节一行）</h2><textarea id="sPeriods">' + esc((DB.periods || []).join('\n')) + '</textarea>'
       + '<div class="mini">格式：08:00-08:50。共 11 行，对应第 1～11 节。</div>'
       + '<div class="actions"><button class="btn small primary" data-act="savePeriods">保存</button></div></div>';
 
