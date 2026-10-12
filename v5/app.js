@@ -7,7 +7,7 @@
 
   var LS_DB = 'wb.db.v2', LS_DAILY = 'wb.daily.v2', LS_SEEN = 'wb.seen.v1', LS_WEEK = 'wb.week.v1';
   var DOW_CN = ['一', '二', '三', '四', '五', '六', '日'];
-  var APP_VERSION = 'v5.2 · 2026-10-12';
+  var APP_VERSION = 'v5.3 · 2026-10-12';
   var CLOUD_DATA = 'd-7f3a9c2e.json';
 
   /* ---------------- 小工具 ---------------- */
@@ -58,9 +58,40 @@
     if (!location.hash) return null;
     return parsePayload(location.hash);
   }
+  /* 导入链接 / 从云端取回：手机上已经有数据时"只换课表和作息"，别的东西一概不动。
+     手机上没有数据（新手机）时才整套照搬。 */
+  function itemKey(x) { return x && (x.title + '|' + (x.due || x.date || '')); }
+  function mergeList(mine, theirs, tomb) {
+    var out = (mine || []).slice(), seen = {}, dead = {};
+    (tomb || []).forEach(function (t) { dead[t] = 1; });
+    out.forEach(function (x) { seen[itemKey(x)] = 1; });
+    (theirs || []).forEach(function (x) {
+      var k = itemKey(x);
+      if (!seen[k] && !dead[k]) { out.push(x); seen[k] = 1; }
+    });
+    return out;
+  }
   function applyData(obj, msg) {
-    DB = obj; saveDB(DB); markSeen(); seenWeek = 'cur';
-    toast(msg || '数据已更新'); render();
+    var merged = HAS_LOCAL;
+    if (merged) {
+      var next = clone(obj);
+      /* 这些字段以手机上的为准，导入内容不动它们 */
+      ['student', 'greeting', 'motto', 'tasks', 'habits', 'ddlDeleted', 'cdDeleted']
+        .forEach(function (k) { if (DB[k] != null) next[k] = clone(DB[k]); });
+      /* 习惯名取并集：只增不减，历史记录按名字对得上 */
+      var names = (DB.habits || []).slice();
+      (obj.habits || []).forEach(function (n) { if (names.indexOf(n) < 0) names.push(n); });
+      next.habits = names;
+      next.ddl = mergeList(DB.ddl, obj.ddl, DB.ddlDeleted);
+      next.countdown = mergeList(DB.countdown, obj.countdown, DB.cdDeleted);
+      DB = next;
+    } else {
+      DB = clone(obj);
+    }
+    HAS_LOCAL = true;
+    saveDB(DB); markSeen(); seenWeek = 'cur';
+    toast((msg || '数据已更新') + (merged ? '（你的待办、打卡、要事都保留）' : ''));
+    render();
   }
   async function makeLink() {
     var json = JSON.stringify(DB), base = location.origin + location.pathname;
@@ -77,13 +108,14 @@
 
   /* ---------------- 数据读写 ---------------- */
   var DEMO = clone(window.DEMO_DATA);
+  var HAS_LOCAL = false;
   var DB = loadDB();
   var tab = 'today', seenWeek = 'cur';
 
   function loadDB() {
     var raw = null;
     try { raw = localStorage.getItem(LS_DB); } catch (e) { }
-    if (raw) { try { return JSON.parse(raw); } catch (e) { } }
+    if (raw) { try { HAS_LOCAL = true; return JSON.parse(raw); } catch (e) { } }
     return clone(DEMO);
   }
   function saveDB(o) {
@@ -471,8 +503,9 @@
       + '<div class="actions"><button class="btn small primary" data-act="savePeriods">保存</button></div></div>';
 
     h += '<div class="card"><h2>数据</h2>'
-      + '<div class="mini">导出的 JSON 就是你的全部数据（课表＋DDL＋习惯＋每周计划）。换手机时在新手机上导入即可。</div>'
+      + '<div class="mini">导出的 JSON 就是你的全部数据（课表＋DDL＋习惯）。换手机时在新手机上导入即可。</div>'
       + '<textarea id="jsonBox" style="min-height:130px;font-family:ui-monospace,Menlo,monospace;font-size:12.5px">' + esc(JSON.stringify(DB, null, 1)) + '</textarea>'
+      + '<div class="mini">点「应用这段 JSON」是<b>整体替换</b>（连待办一起换成这段内容），和下面扫码导入不一样。</div>'
       + '<div class="actions"><button class="btn small primary" data-act="applyJson">应用这段 JSON</button>'
       + '<button class="btn small" data-act="copyLink">复制导入链接</button>'
       + '<button class="btn small" data-act="download">导出文件</button>'
@@ -481,6 +514,8 @@
     h += '<div class="card"><h2>换设备 / 换图标后取回数据</h2>'
       + '<div class="mini">iPhone 上「主屏图标」和「Safari」是两套独立存储：在 Safari 里导入的数据，<br>'
       + '从主屏图标打开时可能看不到。用下面任意一种方式取回一次就好。</div>'
+      + '<div class="mini">这种方式<b>只更新课表和作息</b>：你手机上的待办、倒计时、每天的要事、<br>'
+      + '打卡记录、复盘、每周计划都会原样保留。</div>'
       + '<div class="actions"><button class="btn small primary" data-act="fetchCloud">从云端取回我的数据</button></div>'
       + '<div class="mini">或者把导入链接／数据粘进下面的框（只粘 <b>z=</b> 后面那一大串也可以）：</div>'
       + '<textarea id="pasteBox" style="min-height:70px;font-family:ui-monospace,Menlo,monospace;font-size:12px" placeholder="把链接或数据粘到这里"></textarea>'
@@ -585,7 +620,10 @@
       DB.ddl.push({ due: document.getElementById('ddlDue').value || '', title: ti, note: '', done: false });
       saveDB(); rerender();
     } else if (act === 'ddlDel') {
-      DB.ddl.splice(+el.getAttribute('data-i'), 1); saveDB(); rerender();
+      /* 记下"这个是我删掉的"，以后重新导入数据时不会再冒出来 */
+      var gone = DB.ddl.splice(+el.getAttribute('data-i'), 1)[0];
+      if (gone) { DB.ddlDeleted = DB.ddlDeleted || []; DB.ddlDeleted.push(itemKey(gone)); }
+      saveDB(); rerender();
     } else if (act === 'ddlDone') {
       var it = DB.ddl[+el.getAttribute('data-i')]; it.done = !it.done;
       if (it.done) it.note = (it.note || '') ; saveDB(); rerender();
@@ -596,7 +634,9 @@
       DB.countdown = DB.countdown || [];
       DB.countdown.push({ date: cd, title: ct }); saveDB(); rerender();
     } else if (act === 'cdDel') {
-      DB.countdown.splice(+el.getAttribute('data-i'), 1); saveDB(); rerender();
+      var cGone = DB.countdown.splice(+el.getAttribute('data-i'), 1)[0];
+      if (cGone) { DB.cdDeleted = DB.cdDeleted || []; DB.cdDeleted.push(itemKey(cGone)); }
+      saveDB(); rerender();
     } else if (act === 'saveTpl') {
       DB.tasks = document.getElementById('taskTpl').value.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
       saveDB(); toast('模板已保存');
@@ -618,7 +658,8 @@
     } else if (act === 'applyJson') {
       try {
         var obj = JSON.parse(document.getElementById('jsonBox').value);
-        applyData(obj, '已应用');
+        DB = clone(obj); HAS_LOCAL = true; saveDB(DB); markSeen();
+        toast('已整体替换（按你贴的 JSON）'); render();
       } catch (err) { toast('JSON 格式有问题，没改动'); }
     } else if (act === 'fetchCloud') {
       var btnCloud = el;
@@ -709,9 +750,10 @@
   (async function () {
     var imported = await readHash();
     if (!imported) return;
-    DB = imported; saveDB(DB); markSeen(); clearHash();
-    seenWeek = 'cur'; render();
-    toast('数据已导入这台手机');
+    clearHash();
+    /* 必须走 applyData —— 它会判断"这台手机上已经有数据"从而只更新课表，
+       直接 DB = imported 会把用户手机上的待办一起换掉。 */
+    applyData(imported, '数据已导入这台手机');
   })();
   /* 不再使用 service worker（它正是"卡在旧版本"的元凶）。
      这里主动清理以前版本留下的 SW 和缓存，最多自动刷新一次。 */
