@@ -32,7 +32,7 @@
   "schedule": {
     "1": [
       { "from": 1, "to": 2, "name": "高等数学（一）上", "teacher": "周丽珍", "place": "东教楼 609", "weeks": "2-17" },
-      { "from": 4, "to": 5, "name": "排球（男生）", "teacher": "鞠菁", "place": "本部排球场（红楼南）", "weeks": "2-17" },
+      { "from": 4, "to": 5, "name": "篮球（男生）", "teacher": "", "place": "篮球场（本部纵横楼东）", "weeks": "2-17" },
       { "from": 6, "to": 7, "name": "计算机信息技术（计算思维）", "teacher": "朱锋", "place": "理工楼 1 楼", "weeks": "2-17" },
       { "from": 8, "to": 9, "name": "计算机信息技术（计算思维）", "teacher": "朱锋", "place": "理工楼 153", "weeks": "2-17" }
     ],
