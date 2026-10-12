@@ -5,9 +5,9 @@
 (function () {
   'use strict';
 
-  var LS_DB = 'wb.db.v2', LS_DAILY = 'wb.daily.v2', LS_SEEN = 'wb.seen.v1';
+  var LS_DB = 'wb.db.v2', LS_DAILY = 'wb.daily.v2', LS_SEEN = 'wb.seen.v1', LS_WEEK = 'wb.week.v1';
   var DOW_CN = ['一', '二', '三', '四', '五', '六', '日'];
-  var APP_VERSION = 'v5.1 · 2026-09-14';
+  var APP_VERSION = 'v5.2 · 2026-10-12';
   var CLOUD_DATA = 'd-7f3a9c2e.json';
 
   /* ---------------- 小工具 ---------------- */
@@ -104,6 +104,38 @@
   }
   function isFirstRun() {
     try { return !localStorage.getItem(LS_SEEN); } catch (e) { return false; }
+  }
+
+  /* ---------------- 每周计划（按"周一"归档，一周一份） ---------------- */
+  function mondayOf(d) {
+    var x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    x.setDate(x.getDate() - (dowOf(d) - 1));
+    return x;
+  }
+  function loadWeeks() {
+    try { return JSON.parse(localStorage.getItem(LS_WEEK) || '{}'); } catch (e) { return {}; }
+  }
+  function saveWeeks(o) {
+    try { localStorage.setItem(LS_WEEK, JSON.stringify(o)); } catch (e) { }
+  }
+  function readPlan(key) {
+    var W = loadWeeks();
+    return (W[key] || []).slice();
+  }
+  function mutPlan(key, fn) {
+    var W = loadWeeks();
+    if (!W[key]) W[key] = [];
+    fn(W[key]); saveWeeks(W);
+  }
+  function weekRangeText(mon) {
+    return dateCN(mon) + ' – ' + dateCN(new Date(mon.getTime() + 6 * 86400000));
+  }
+  function streakOf(name, now) {
+    var D = loadDaily(), n = 0, d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    var has = function (x) { var k = ymd(x); return !!(D[k] && D[k].habits && D[k].habits[name]); };
+    if (!has(d)) d = new Date(d.getTime() - 86400000);
+    while (has(d) && n < 400) { n++; d = new Date(d.getTime() - 86400000); }
+    return n;
   }
 
   /* ---------------- 学期周次 / 课程 ---------------- */
@@ -244,6 +276,26 @@
     h += '<div class="addrow"><input id="newTask" placeholder="加一条要事…" autocomplete="off"><button data-act="addTask">加</button></div>';
     h += '</div>';
 
+    /* 本周计划：紧跟在"今天的三件要事"下面 */
+    var mon = mondayOf(now), wkKey = ymd(mon);
+    var plan = readPlan(wkKey);
+    var pDone = plan.filter(function (p) { return p.done; }).length;
+    var pPct = plan.length ? Math.round(pDone / plan.length * 100) : 0;
+    var prevOpen = readPlan(ymd(new Date(mon.getTime() - 604800000))).filter(function (p) { return !p.done; });
+    h += '<div class="card"><h2>本周计划</h2>';
+    h += '<div class="planhead"><span class="w">' + (wk ? '第 ' + wk + ' 周 · ' : '') + weekRangeText(mon) + '</span>'
+      + '<span class="w">' + (plan.length ? pDone + ' / ' + plan.length : '还没写') + '</span></div>';
+    if (plan.length) h += '<div class="bar"><i style="width:' + pPct + '%"></i></div>';
+    plan.forEach(function (p, i) {
+      h += '<button class="task' + (p.done ? ' done' : '') + '" data-act="plan" data-i="' + i + '">'
+        + '<span class="check">' + (p.done ? '✓' : '') + '</span><span class="t">' + esc(p.t) + '</span>'
+        + '<span class="del" data-act="planDel" data-i="' + i + '">×</span></button>';
+    });
+    if (!plan.length) h += '<div class="empty">这周还没写计划。写 2–3 件"这周一定要推进的事"。</div>';
+    h += '<div class="addrow"><input id="newPlan" placeholder="这周要推进的事…" autocomplete="off"><button data-act="addPlan">加</button></div>';
+    if (prevOpen.length) h += '<div class="actions"><button class="btn small" data-act="carryPlan">把上周没做完的 ' + prevOpen.length + ' 件挪到本周</button></div>';
+    h += '</div>';
+
     var undone = [];
     (DB.ddl || []).forEach(function (d, i) { if (!d.done) undone.push({ d: d, i: i }); });
     undone.sort(function (a, b) {
@@ -276,13 +328,6 @@
       });
       h += '</div>';
     }
-
-    h += '<div class="card"><h2>习惯打卡</h2><div class="habits">';
-    (DB.habits || []).forEach(function (n) {
-      h += '<button class="habit' + (day.habits[n] ? ' on' : '') + '" data-act="habit" data-n="' + esc(n) + '">' + esc(n) + (day.habits[n] ? ' ✓' : '') + '</button>';
-    });
-    if (!(DB.habits || []).length) h += '<div class="empty">还没有设置习惯。</div>';
-    h += '</div></div>';
 
     h += '<div class="card"><h2>今日复盘</h2><textarea id="review" placeholder="今天做成了什么？哪里卡住了？">' + esc(day.review || '') + '</textarea>'
       + '<div class="actions"><button class="btn small" data-act="copyReview">复制复盘</button><button class="btn small" data-act="saveReview">保存</button></div></div>';
@@ -364,6 +409,47 @@
     return h;
   }
 
+  /* ---------------- 视图：打卡 ---------------- */
+  function viewHabit() {
+    var now = new Date(), key = ymd(now), wk = weekNumber(now);
+    var day = today(key), D = loadDaily();
+    var habits = DB.habits || [];
+    var doneN = habits.filter(function (n) { return day.habits[n]; }).length;
+    var days = [];
+    for (var i = 6; i >= 0; i--) days.push(new Date(now.getTime() - i * 86400000));
+
+    var h = '<div class="head"><div><div class="date">' + dateCN(now) + ' 周' + DOW_CN[dowOf(now) - 1]
+      + (wk ? ' · 第 ' + wk + ' 周' : '') + '</div><h1>习惯打卡</h1></div></div>';
+    h += '<div class="chips"><span class="chip' + (habits.length && doneN === habits.length ? '' : ' gray') + '">今天 ' + doneN + ' / ' + habits.length + ' 项</span>'
+      + (habits.length && doneN === habits.length ? '<span class="chip">全部打完，收工</span>' : '') + '</div>';
+
+    h += '<div class="card"><h2>今天</h2><div class="habits">';
+    habits.forEach(function (n) {
+      h += '<button class="habit' + (day.habits[n] ? ' on' : '') + '" data-act="habit" data-n="' + esc(n) + '">' + esc(n) + (day.habits[n] ? ' ✓' : '') + '</button>';
+    });
+    if (!habits.length) h += '<div class="empty">还没有设置习惯，去「设置 → 习惯」里加。</div>';
+    h += '</div></div>';
+
+    if (habits.length) {
+      h += '<div class="card"><h2>最近 7 天</h2><div class="htable"><span></span>';
+      days.forEach(function (d, i) {
+        var last = i === days.length - 1;
+        h += '<span class="dl' + (last ? ' now' : '') + '">' + (last ? '今' : DOW_CN[dowOf(d) - 1]) + '</span>';
+      });
+      habits.forEach(function (n) {
+        var st = streakOf(n, now);
+        h += '<span class="hn">' + esc(n) + (st > 1 ? ' <em>连 ' + st + ' 天</em>' : '') + '</span>';
+        days.forEach(function (d, i) {
+          var k = ymd(d), on = !!(D[k] && D[k].habits && D[k].habits[n]);
+          h += '<i class="c' + (on ? ' on' : '') + (i === days.length - 1 ? ' now' : '') + '">✓</i>';
+        });
+      });
+      h += '</div><div class="mini" style="margin-top:11px">方块亮起 = 那天打过卡，「连 N 天」是到今天为止的连续天数。</div></div>';
+    }
+    h += '<footer>打卡记录按日期存在这台手机里，改习惯名称不会影响以前打过的卡。</footer>';
+    return h;
+  }
+
   /* ---------------- 视图：设置 ---------------- */
   function viewSetup() {
     var t = DB.term || {};
@@ -385,7 +471,7 @@
       + '<div class="actions"><button class="btn small primary" data-act="savePeriods">保存</button></div></div>';
 
     h += '<div class="card"><h2>数据</h2>'
-      + '<div class="mini">导出的 JSON 就是你的全部数据（课表＋DDL＋习惯）。换手机时在新手机上导入即可。</div>'
+      + '<div class="mini">导出的 JSON 就是你的全部数据（课表＋DDL＋习惯＋每周计划）。换手机时在新手机上导入即可。</div>'
       + '<textarea id="jsonBox" style="min-height:130px;font-family:ui-monospace,Menlo,monospace;font-size:12.5px">' + esc(JSON.stringify(DB, null, 1)) + '</textarea>'
       + '<div class="actions"><button class="btn small primary" data-act="applyJson">应用这段 JSON</button>'
       + '<button class="btn small" data-act="copyLink">复制导入链接</button>'
@@ -411,9 +497,10 @@
   }
 
   /* ---------------- 渲染 ---------------- */
+  var VIEWS = { today: viewToday, week: viewWeek, task: viewTask, habit: viewHabit, setup: viewSetup };
   function render() {
     var v = document.getElementById('view');
-    v.innerHTML = tab === 'today' ? viewToday() : tab === 'week' ? viewWeek() : tab === 'task' ? viewTask() : viewSetup();
+    v.innerHTML = (VIEWS[tab] || viewToday)();
     Array.prototype.forEach.call(document.querySelectorAll('#tabbar button'), function (b) {
       b.classList.toggle('on', b.getAttribute('data-tab') === tab);
     });
@@ -456,6 +543,31 @@
       var D4 = loadDaily(), d4 = today(key), n = el.getAttribute('data-n');
       d4.habits[n] = !d4.habits[n];
       D4[key] = d4; saveDaily(D4); rerender();
+    } else if (act === 'plan') {
+      var pmi = +el.getAttribute('data-i'), pmk = ymd(mondayOf(new Date()));
+      mutPlan(pmk, function (arr) { if (arr[pmi]) arr[pmi].done = !arr[pmi].done; });
+      rerender();
+    } else if (act === 'planDel') {
+      e.stopPropagation();
+      var pdi = +el.getAttribute('data-i'), pdk = ymd(mondayOf(new Date()));
+      mutPlan(pdk, function (arr) { arr.splice(pdi, 1); });
+      rerender();
+    } else if (act === 'addPlan') {
+      var pin = document.getElementById('newPlan');
+      var ptx = (pin.value || '').trim();
+      if (!ptx) return;
+      mutPlan(ymd(mondayOf(new Date())), function (arr) { arr.push({ t: ptx, done: false }); });
+      rerender();
+    } else if (act === 'carryPlan') {
+      var mon0 = mondayOf(new Date()), curK = ymd(mon0), prvK = ymd(new Date(mon0.getTime() - 604800000));
+      var WP = loadWeeks();
+      var oldItems = (WP[prvK] || []).filter(function (x) { return !x.done; });
+      if (!oldItems.length) { toast('上周没有没做完的'); return; }
+      WP[curK] = (WP[curK] || []).concat(oldItems.map(function (x) { return { t: x.t, done: false }; }));
+      WP[prvK] = (WP[prvK] || []).filter(function (x) { return x.done; });
+      saveWeeks(WP);
+      toast('已挪过来 ' + oldItems.length + ' 件');
+      rerender();
     } else if (act === 'copyReview' || act === 'saveReview') {
       var D5 = loadDaily(), d5 = today(key);
       d5.review = document.getElementById('review').value;
@@ -588,7 +700,7 @@
   /* 回车快速添加 */
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Enter') return;
-    var map = { newTask: 'addTask', ddlTitle: 'ddlAdd', cdTitle: 'cdAdd' };
+    var map = { newTask: 'addTask', newPlan: 'addPlan', ddlTitle: 'ddlAdd', cdTitle: 'cdAdd' };
     var a = map[e.target.id];
     if (a) { e.preventDefault(); var b = document.querySelector('[data-act="' + a + '"]'); if (b) b.click(); }
   });
