@@ -94,6 +94,20 @@
   .habits{display:flex; flex-wrap:wrap; gap:9px;}
   .habit{border:1px solid var(--line); background:transparent; color:var(--ink); padding:9px 13px; border-radius:12px; font-size:14.5px; font-family:inherit; cursor:pointer;}
   .habit.on{background:var(--ok-soft); border-color:transparent; color:var(--ok); font-weight:600;}
+  .planhead{display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin-bottom:10px;}
+  .planhead .w{font-size:12.5px; color:var(--ink2); font-variant-numeric:tabular-nums;}
+  .htable{display:grid; grid-template-columns:minmax(0,1fr) repeat(7,26px); gap:8px 4px; align-items:center;}
+  .htable .dl{font-size:11px; color:var(--ink2); text-align:center;}
+  .htable .dl.now{color:var(--accent); font-weight:700;}
+  .htable .hn{font-size:14px; line-height:1.3; min-width:0; overflow:hidden;}
+  .htable .hn em{display:block; font-style:normal; font-size:11.5px; color:var(--ink2); margin-top:1px;}
+  .htable .c{
+    width:26px; height:26px; border-radius:9px; border:1px solid var(--line); background:var(--bg);
+    display:flex; align-items:center; justify-content:center;
+    font-size:12px; font-style:normal; line-height:1; color:transparent;
+  }
+  .htable .c.on{background:var(--ok-soft); border-color:transparent; color:var(--ok); font-weight:700;}
+  .htable .c.now{outline:1.5px solid var(--accent); outline-offset:1px;}
   .day{margin-bottom:14px;}
   .day h3{font-size:14px; margin:0 0 7px; display:flex; align-items:center; gap:8px; font-weight:600;}
   .day h3 .d{color:var(--ink2); font-weight:500; font-size:12.5px;}
@@ -147,10 +161,11 @@
   <button data-tab="today"><i>◎</i>今日</button>
   <button data-tab="week"><i>▤</i>课表</button>
   <button data-tab="task"><i>☑</i>任务</button>
+  <button data-tab="habit"><i>◉</i>打卡</button>
   <button data-tab="setup"><i>⚙</i>设置</button>
 </nav>
 <div class="toast" id="toast"></div>
 <script src="data.js?v=6"></script>
-<script src="app.js?v=6"></script>
+<script src="app.js?v=7"></script>
 </body>
 </html>
